@@ -1,0 +1,187 @@
+app:
+  name: socialmedia_stock_picks
+  timezone: America/New_York
+  host: 127.0.0.1
+  port: 8000
+  optional_basic_auth: false
+
+reddit:
+  client_id: ${REDDIT_CLIENT_ID}
+  client_secret: ${REDDIT_CLIENT_SECRET}
+  user_agent: socialmedia_stock_picks/0.1 by ${REDDIT_USERNAME}
+  subreddits:
+    - wallstreetbets
+    - Daytrading
+    - stocks
+    - StockMarket
+    - options
+  poll_sorts:
+    - new
+    - hot
+  max_posts_per_sub_per_poll: 100
+  comment_fetch:
+    enabled: true
+    max_depth: 2
+    min_post_score: 5
+    max_comments_per_post: 200
+
+ingest:
+  mode: scheduled
+  interval_minutes: 10
+  retry:
+    max_attempts: 5
+    backoff_seconds: 30
+
+aggregation:
+  windows:
+    - 1h
+    - 4h
+    - 24h
+    - 3d
+    - 7d
+  recompute_on_ingest: true
+  min_mentions_for_ticker_listing: 3
+
+ticker_extraction:
+  universe: us_equities
+  allowlist_path: data/us_symbols.csv
+  blocklist:
+    - "AI"
+    - "ON"
+    - "IT"
+    - "ALL"
+    - "FOR"
+    - "DD"
+    - "USA"
+    - "CEO"
+    - "ETF"
+    - "IPO"
+    - "SEC"
+    - "FDA"
+    - "EPS"
+    - "PE"
+    - "PS"
+    - "YOLO"
+  weights:
+    title: 2.0
+    post_body: 1.5
+    comment: 1.0
+    dd_flair: 1.3
+    negative_score_multiplier: 0.5
+
+ranking:
+  profiles:
+    day:
+      default_window: 24h
+      weights:
+        unique_authors: 0.35
+        velocity: 0.40
+        weighted_mentions: 0.15
+        engagement_depth: 0.10
+      crowded_penalty:
+        price_5d_pct_above: 8.0
+        penalty_factor: 0.7
+    swing:
+      default_window: 7d
+      weights:
+        unique_authors: 0.30
+        velocity: 0.20
+        weighted_mentions: 0.20
+        subreddit_breadth: 0.20
+        engagement_depth: 0.10
+
+intents:
+  classifier: keyword
+  keywords:
+    yolo:
+      - yolo
+      - calls
+      - puts
+      - 0dte
+    dd:
+      - dd
+      - due diligence
+      - thesis
+    earnings:
+      - earnings
+      - guidance
+      - beat
+      - miss
+    technical:
+      - support
+      - resistance
+      - breakout
+      - rsi
+    news:
+      - sec filing
+      - 8-k
+    options:
+      - iv
+      - implied volatility
+      - gamma
+    short_squeeze:
+      - short squeeze
+      - borrow rate
+
+market:
+  provider: tiingo
+  api_key: ${MARKET_API_KEY}
+  daily_bars_lookback_days: 60
+  sync_on_rollup: true
+
+llm:
+  provider: openai
+  api_key: ${LLM_API_KEY}
+  model: gpt-4o-mini
+  max_input_tokens: 12000
+  temperature: 0.2
+  summaries:
+    mode: both
+    scheduled_top_n: 15
+    schedule_cron: "0 7,12,16 * * 1-5"
+    cache_ttl_minutes: 120
+    min_weighted_mentions: 5
+    top_posts: 15
+    top_comments: 30
+
+opportunities:
+  enabled_types:
+    - O1
+    - O2
+    - O3
+    - O4
+    - O5
+    - O6
+  O1:
+    velocity_z_min: 2.0
+    price_5d_abs_max_pct: 3.0
+  O2:
+    velocity_min_pct: 50
+    price_5d_min_pct: 8.0
+  O3:
+    bullish_intent_drop_pp: 15
+    windows:
+      - 7d
+  O4:
+    window: 4h
+    velocity_min_pct: 100
+    volume_vs_20d_min: 1.5
+  O5:
+    dd_post_min: 2
+    price_5d_abs_max_pct: 4.0
+    min_comments: 20
+  O6:
+    options_sub_mention_share_min: 0.25
+
+digest:
+  enabled: true
+  output_path: data/digests
+  schedule_cron: "30 7 * * 1-5"
+  window: 24h
+  profile: day
+  top_n_tickers: 20
+
+retention:
+  raw_posts_days: 90
+  raw_comments_days: 90
+  rollups_days: 365
