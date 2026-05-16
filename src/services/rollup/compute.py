@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from core.timeutil import UTC
+
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Settings, get_settings
-from models.entities import RedditComment, RedditPost, TickerMention, TickerRollup
+from models.entities import PostIntent, RedditComment, RedditPost, TickerMention, TickerRollup
 
 WINDOW_DELTAS = {
     "1h": timedelta(hours=1),
@@ -56,6 +59,13 @@ class RollupService:
             .group_by(TickerMention.ticker)
         )
         tickers = [row[0] for row in tickers_result.all()]
+        await self.db.execute(
+            delete(TickerRollup).where(
+                TickerRollup.window == window,
+                TickerRollup.window_end == window_end,
+                TickerRollup.profile == profile,
+            )
+        )
         written = 0
         for ticker in tickers:
             metrics = await self._metrics_for_ticker(
@@ -64,21 +74,37 @@ class RollupService:
             if metrics["mention_count"] < self.settings.aggregation.min_mentions_for_ticker_listing:
                 continue
             rank_score = self._rank_score(metrics, profile)
-            rollup = TickerRollup(
-                ticker=ticker,
-                window=window,
-                window_end=window_end,
-                mention_count=metrics["mention_count"],
-                weighted_mentions=metrics["weighted_mentions"],
-                unique_authors=metrics["unique_authors"],
-                velocity_pct=metrics["velocity_pct"],
-                engagement_depth=metrics["engagement_depth"],
-                subreddit_breadth=metrics["subreddit_breadth"],
-                intent_counts=metrics.get("intent_counts"),
-                rank_score=rank_score,
-                profile=profile,
+            stmt = (
+                insert(TickerRollup)
+                .values(
+                    ticker=ticker,
+                    window=window,
+                    window_end=window_end,
+                    mention_count=metrics["mention_count"],
+                    weighted_mentions=metrics["weighted_mentions"],
+                    unique_authors=metrics["unique_authors"],
+                    velocity_pct=metrics["velocity_pct"],
+                    engagement_depth=metrics["engagement_depth"],
+                    subreddit_breadth=metrics["subreddit_breadth"],
+                    intent_counts=metrics.get("intent_counts"),
+                    rank_score=rank_score,
+                    profile=profile,
+                )
+                .on_conflict_do_update(
+                    constraint="uq_rollup",
+                    set_={
+                        "mention_count": metrics["mention_count"],
+                        "weighted_mentions": metrics["weighted_mentions"],
+                        "unique_authors": metrics["unique_authors"],
+                        "velocity_pct": metrics["velocity_pct"],
+                        "engagement_depth": metrics["engagement_depth"],
+                        "subreddit_breadth": metrics["subreddit_breadth"],
+                        "intent_counts": metrics.get("intent_counts"),
+                        "rank_score": rank_score,
+                    },
+                )
             )
-            await self.db.merge(rollup)
+            await self.db.execute(stmt)
             written += 1
         return written
 
@@ -151,6 +177,20 @@ class RollupService:
         )
         engagement_depth = float(depth_result.scalar_one() or 0.0)
 
+        intent_counts: dict[str, int] = {}
+        intent_result = await self.db.execute(
+            select(PostIntent.intent, func.count())
+            .join(
+                TickerMention,
+                (TickerMention.source_id == PostIntent.post_id)
+                & (TickerMention.source_type == "post"),
+            )
+            .where(*base_filter)
+            .group_by(PostIntent.intent)
+        )
+        for intent, count in intent_result.all():
+            intent_counts[intent] = int(count)
+
         return {
             "mention_count": int(mention_count),
             "weighted_mentions": float(weighted),
@@ -158,6 +198,7 @@ class RollupService:
             "velocity_pct": velocity,
             "engagement_depth": engagement_depth,
             "subreddit_breadth": int(breadth),
+            "intent_counts": intent_counts,
         }
 
     def _rank_score(self, metrics: dict, profile: str) -> float:

@@ -38,6 +38,7 @@ class EnvSettings(BaseSettings):
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
     reddit_username: str = ""
+    reddit_password: str = ""
     llm_api_key: str = ""
     market_api_key: str = ""
     app_password: str = ""
@@ -55,6 +56,8 @@ class RedditConfig(BaseModel):
     client_id: str = ""
     client_secret: str = ""
     user_agent: str = ""
+    username: str = ""
+    password: str = ""
     subreddits: list[str] = Field(default_factory=list)
     poll_sorts: list[str] = Field(default_factory=lambda: ["new", "hot"])
     max_posts_per_sub_per_poll: int = 100
@@ -138,6 +141,10 @@ def get_settings() -> Settings:
         settings.reddit.client_id = env.reddit_client_id
     if not settings.reddit.client_secret:
         settings.reddit.client_secret = env.reddit_client_secret
+    if not settings.reddit.username:
+        settings.reddit.username = env.reddit_username
+    if not settings.reddit.password:
+        settings.reddit.password = env.reddit_password
     if not settings.llm.api_key:
         settings.llm.api_key = env.llm_api_key
     if settings.market.get("api_key") in ("", None):

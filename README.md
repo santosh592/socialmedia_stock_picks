@@ -74,16 +74,30 @@ alembic/         # migrations
 tests/
 ```
 
-## Implementation status (v0.1 scaffold)
+## Implementation status (v0.1)
 
 - [x] Postgres schema + Alembic migration
-- [x] FastAPI skeleton + config loading
-- [x] Ticker extraction + intent classifier (keyword)
-- [x] Rollup / opportunity engines (skeleton logic)
-- [ ] Reddit ingest (`services/reddit/`)
-- [ ] Market data sync
-- [ ] Full LLM summary pipeline with citations
+- [x] FastAPI API + config loading
+- [x] Reddit ingest (`asyncpraw`) — posts, comments, ticker mentions
+- [x] Rollups + opportunity rules (with market-aware O1/O2/O5)
+- [x] Tiingo market data sync for active tickers
+- [x] OpenAI LLM summaries with citation schema + content-based cache
 - [ ] Web UI
+
+### Credentials required for full pipeline
+
+| Variable | Purpose |
+|----------|---------|
+| `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | Reddit script app |
+| `REDDIT_USERNAME`, `REDDIT_PASSWORD` | Reddit account |
+| `LLM_API_KEY` | OpenAI summaries |
+| `MARKET_API_KEY` | Tiingo daily prices |
+
+Expand the ticker allowlist:
+
+```bash
+python scripts/download_symbols.py
+```
 
 ## Disclaimer
 

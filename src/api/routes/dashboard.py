@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.schemas import DashboardResponse, LastIngestInfo, OpportunityCard, TickerRow
 from core.config import get_settings
 from core.database import get_db
-from models.entities import IngestRun, OpportunitySignal, TickerRollup
+from models.entities import IngestRun, OpportunitySignal, Summary, TickerRollup
+from services.market.tiingo import MarketDataService
 
 router = APIRouter(tags=["dashboard"])
 
@@ -40,17 +41,32 @@ async def dashboard(
         status=ingest.status if ingest else None,
     )
 
-    tickers = [
-        TickerRow(
-            rank=i + 1,
-            ticker=r.ticker,
-            mention_count=r.mention_count,
-            weighted_mentions=r.weighted_mentions,
-            unique_authors=r.unique_authors,
-            velocity_pct=r.velocity_pct,
+    market = MarketDataService(db)
+    tickers = []
+    for i, r in enumerate(rollups):
+        tone = None
+        summary_result = await db.execute(
+            select(Summary)
+            .where(Summary.ticker == r.ticker, Summary.window == effective_window)
+            .order_by(Summary.created_at.desc())
+            .limit(1)
         )
-        for i, r in enumerate(rollups)
-    ]
+        summary_row = summary_result.scalar_one_or_none()
+        if summary_row and summary_row.payload.get("status") == "ok":
+            tone = summary_row.payload.get("tone")
+        tickers.append(
+            TickerRow(
+                rank=i + 1,
+                ticker=r.ticker,
+                mention_count=r.mention_count,
+                weighted_mentions=r.weighted_mentions,
+                unique_authors=r.unique_authors,
+                velocity_pct=r.velocity_pct,
+                price_5d_pct=await market.price_5d_pct(r.ticker),
+                summary_tone=tone,
+                has_summary=summary_row is not None,
+            )
+        )
 
     opp_result = await db.execute(
         select(OpportunitySignal)
