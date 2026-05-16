@@ -30,13 +30,17 @@ cp .env.example .env
 # 4. Migrations
 alembic upgrade head
 
-# 5. Run API
+# 5. Run API (terminal 1)
 smsp-api
 # or: uvicorn api.main:app --reload --app-dir src
+
+# 6. Run web UI (terminal 2)
+cd web && npm install && npm run dev
 ```
 
 API base: `http://127.0.0.1:8000/api/v1`  
-OpenAPI: `http://127.0.0.1:8000/docs`
+OpenAPI: `http://127.0.0.1:8000/docs`  
+Dashboard: `http://127.0.0.1:3000`
 
 ## Key endpoints
 
@@ -71,6 +75,7 @@ src/
   services/      # ticker, rollup, summary, reddit, opportunities
   workers/       # ingest, digest, scheduler
 alembic/         # migrations
+web/             # Vite + React dashboard
 tests/
 ```
 
@@ -82,7 +87,7 @@ tests/
 - [x] Rollups + opportunity rules (with market-aware O1/O2/O5)
 - [x] Tiingo market data sync for active tickers
 - [x] OpenAI LLM summaries with citation schema + content-based cache
-- [ ] Web UI
+- [x] Web UI (Vite + React)
 
 ### Credentials required for full pipeline
 

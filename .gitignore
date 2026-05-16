@@ -12,3 +12,5 @@ build/
 data/digests/
 *.log
 .DS_Store
+web/node_modules/
+web/dist/
