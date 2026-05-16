@@ -9,7 +9,7 @@ Personal research tool that ingests Reddit stock discussion, ranks US tickers by
 - Python 3.12+
 - Docker (for PostgreSQL)
 - Reddit API app credentials ([create app](https://www.reddit.com/prefs/apps))
-- LLM API key (OpenAI or compatible)
+- LLM API key (Gemini via Google AI Studio, or OpenAI)
 - Market data API key (e.g. Tiingo) — needed when market sync is implemented
 
 ## Quick start
@@ -95,7 +95,8 @@ tests/
 |----------|---------|
 | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | Reddit script app |
 | `REDDIT_USERNAME`, `REDDIT_PASSWORD` | Reddit account |
-| `LLM_API_KEY` | OpenAI summaries |
+| `GEMINI_API_KEY` | Gemini summaries (`llm.provider: gemini` in config) |
+| `LLM_API_KEY` | OpenAI summaries (`llm.provider: openai`) |
 | `MARKET_API_KEY` | Tiingo daily prices |
 
 Expand the ticker allowlist:

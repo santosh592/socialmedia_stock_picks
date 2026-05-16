@@ -40,6 +40,7 @@ class EnvSettings(BaseSettings):
     reddit_username: str = ""
     reddit_password: str = ""
     llm_api_key: str = ""
+    gemini_api_key: str = ""
     market_api_key: str = ""
     app_password: str = ""
 
@@ -94,9 +95,9 @@ class RankingConfig(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    provider: str = "openai"
+    provider: str = "openai"  # openai | gemini
     api_key: str = ""
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-4o-mini"  # e.g. gpt-4o-mini | gemini-2.0-flash
     max_input_tokens: int = 12000
     temperature: float = 0.2
     summaries: dict[str, Any] = Field(default_factory=dict)
@@ -146,7 +147,10 @@ def get_settings() -> Settings:
     if not settings.reddit.password:
         settings.reddit.password = env.reddit_password
     if not settings.llm.api_key:
-        settings.llm.api_key = env.llm_api_key
+        if settings.llm.provider == "gemini":
+            settings.llm.api_key = env.gemini_api_key or env.llm_api_key
+        else:
+            settings.llm.api_key = env.llm_api_key
     if settings.market.get("api_key") in ("", None):
         settings.market["api_key"] = env.market_api_key
     if "${REDDIT_USERNAME}" in settings.reddit.user_agent or not settings.reddit.user_agent:
