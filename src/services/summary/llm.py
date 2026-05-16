@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 from datetime import datetime
 
 from core.timeutil import UTC
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,11 +13,10 @@ from core.config import get_settings
 from models.entities import Summary
 from services.market.tiingo import MarketDataService
 from services.summary.context import SummaryContextBuilder
-from services.summary.prompt import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
+from services.summary.llm_providers import call_summary_llm
+from services.summary.prompt import PROMPT_VERSION
 
 logger = logging.getLogger(__name__)
-
-OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 
 class SummaryService:
@@ -73,8 +70,13 @@ class SummaryService:
         }
 
         if not self.settings.llm.api_key:
+            env_hint = (
+                "GEMINI_API_KEY"
+                if self.settings.llm.provider == "gemini"
+                else "LLM_API_KEY"
+            )
             payload = self._insufficient_payload(
-                ticker, window, "LLM_API_KEY not configured."
+                ticker, window, f"{env_hint} not configured."
             )
         else:
             try:
@@ -100,32 +102,14 @@ class SummaryService:
         return payload
 
     async def _call_llm(self, context: dict, market_snippet: dict) -> dict:
-        user_message = build_user_message(context, market_snippet)
-        body = {
-            "model": self.settings.llm.model,
-            "temperature": self.settings.llm.temperature,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
-        }
-        headers = {
-            "Authorization": f"Bearer {self.settings.llm.api_key}",
-            "Content-Type": "application/json",
-        }
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            response = await client.post(OPENAI_CHAT_URL, headers=headers, json=body)
-            response.raise_for_status()
-            data = response.json()
-        content = data["choices"][0]["message"]["content"]
-        payload = json.loads(content)
-        payload.setdefault("$schema", PROMPT_VERSION)
-        payload.setdefault(
-            "disclaimer",
-            "AI-generated summary of public posts; not financial advice.",
+        return await call_summary_llm(
+            provider=self.settings.llm.provider,
+            api_key=self.settings.llm.api_key,
+            model=self.settings.llm.model,
+            temperature=self.settings.llm.temperature,
+            context=context,
+            market_snippet=market_snippet,
         )
-        return payload
 
     def _insufficient_payload(self, ticker: str, window: str, reason: str) -> dict:
         return {
